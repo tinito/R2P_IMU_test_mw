@@ -59,8 +59,8 @@ PROJECT = ch
 
 # Imported source files and paths
 CHIBIOS = ../ChibiOS-git
-RTCAN = /home/tino/workspace/openrobots/RTCANv2
-R2MW = /home/tino/workspace/openrobots/Middleware
+RTCAN = ../RTCAN
+R2MW = ../Middleware
 
 include ./board.mk
 include $(CHIBIOS)/os/hal/platforms/STM32F1xx/platform.mk
@@ -164,8 +164,7 @@ INCDIR = $(PORTINC) $(KERNINC) $(TESTINC) \
 MCU  = cortex-m3
 
 #TRGT = arm-elf-
-#TRGT = arm-none-eabi-
-TRGT = "/home/tino/ChibiStudio/tools/GNU Tools ARM Embedded/4.6 2012q2/bin/arm-none-eabi-"
+TRGT = arm-none-eabi-
 CC   = $(TRGT)gcc
 CPPC = $(TRGT)g++
 # Enable loading with g++ only if you need C++ runtime support.

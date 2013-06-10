@@ -37,11 +37,19 @@
 #define WA_SIZE_512B      THD_WA_SIZE(512)
 #define WA_SIZE_1K        THD_WA_SIZE(1024)
 
-extern RTCANDriver RTCAND;
+/*===========================================================================*/
+/* STM32 id & reset.                                                         */
+/*===========================================================================*/
+
+uint8_t stm32_id8(void) {
+	const unsigned long * uid = (const unsigned long *)0x1FFFF7E8;
+
+	return (uid[2] & 0xFF);
+}
 
 void stm32_reset(void) {
 
-	chThdSleep(MS2ST(10));
+	chThdSleep(MS2ST(10) );
 
 	/* Ensure completion of memory access. */
 	__DSB();
@@ -53,8 +61,8 @@ void stm32_reset(void) {
 	 * it won't be possible to see that it was a software-triggered reset.
 	 * */
 
-	SCB->AIRCR = ((0x5FA << SCB_AIRCR_VECTKEY_Pos)
-			| (SCB->AIRCR & SCB_AIRCR_PRIGROUP_Msk) | SCB_AIRCR_VECTRESET_Msk
+	SCB ->AIRCR = ((0x5FA << SCB_AIRCR_VECTKEY_Pos)
+			| (SCB ->AIRCR & SCB_AIRCR_PRIGROUP_Msk)| SCB_AIRCR_VECTRESET_Msk
 			| SCB_AIRCR_SYSRESETREQ_Msk);
 
 	/* Ensure completion of memory access. */
@@ -136,83 +144,12 @@ static void cmd_id(BaseSequentialStream *chp, int argc, char *argv[]) {
 
 	(void) argc;
 	(void) argv;
-	chprintf(chp, "UID: %d\r\n", uid8());
-}
-
-static void cmd_srt(BaseSequentialStream *chp, int argc, char *argv[]) {
-	rtcan_msg_t *msg_p;
-
-	if ((argc < 1) || (argc > 4)) {
-		chprintf(chp, "Usage: srt ID <size> <data> <period_in_ms>\r\n");
-		return;
-	}
-
-	if ((argc > 1) && (atoi(argv[1]) > 64)) {
-		chprintf(chp, "Maximum payload is 64 bytes\r\n");
-		return;
-	}
-
-	if ((argc > 3) && (atoi(argv[3]) < 0)) {
-		chprintf(chp, "Period not valid\r\n");
-		return;
-	}
-
-	msg_p = (rtcan_msg_t *)chHeapAlloc(NULL, sizeof(rtcan_msg_t));
-	msg_p->type = RTCAN_SRT;
-	msg_p->callback = NULL;
-	msg_p->status = RTCAN_MSG_READY;
-	msg_p->id = atoi(argv[0]);
-
-	if (argc > 1) {
-		uint8_t *buffer_p;
-		uint8_t *tmp_p;
-		uint16_t i;
-
-		msg_p->size = atoi(argv[1]);
-		buffer_p = (uint8_t *)chHeapAlloc(NULL, msg_p->size);
-		msg_p->data = buffer_p;
-		msg_p->ptr = buffer_p;
-
-		tmp_p = (uint8_t *) argv[2];
-
-		for (i = 0; i < (msg_p->size); i++) {
-			*(buffer_p++) = *(tmp_p++);
-		}
-
-	} else {
-		msg_p->size = 0;
-	}
-
-	if ((argc != 4) || (*(argv[3]) == '0')) {
-		rtcanSendSrt(msg_p, 100);
-
-		while (msg_p->status != RTCAN_MSG_READY) {
-			chThdYield();
-		}
-	} else {
-		Thread *tp;
-		rtcan_test_msg_t test_msg;
-
-		test_msg.rtcan_p = &RTCAND;
-		test_msg.msg_p = msg_p;
-		test_msg.period = atoi(argv[3]);
-
-		tp = chThdCreateFromHeap(NULL, WA_SIZE_256B, NORMALPRIO + 1, rtcanTxTestThread, &test_msg);
-
-		if (tp == NULL) {
-			chprintf(chp, "out of memory\r\n");
-			return;
-		}
-
-		while (test_msg.msg_p != NULL) {
-			chThdYield();
-		}
-	}
+	chprintf(chp, "UID: %d\r\n", stm32_id8());
 }
 
 static const ShellCommand commands[] = { { "mem", cmd_mem }, { "threads",
 		cmd_threads }, { "test", cmd_test }, { "reset", cmd_reset }, { "id",
-		cmd_id }, { "srt", cmd_srt}, { NULL, NULL } };
+		cmd_id }, { NULL, NULL } };
 
 static const ShellConfig shell_cfg1 = { (BaseSequentialStream *) &SERIAL_DRIVER,
 		commands };
@@ -232,65 +169,7 @@ struct LEDDataDebug: public BaseMessage {
 	uint8_t cnt;
 }__attribute__((packed));
 
-/*
- * RX & Publisher thread & callback.
- */
 
-/*
-Publisher<LEDDataDebug> pub("led23");
-
-static void msg1_cb(rtcan_msg_t *msg_p) {
-	LEDDataDebug* d;
-
-	d = pub.alloc();
-	if (d != NULL) {
-		// FIXME
-		d->pin = msg_p->data[0];
-		d->set = msg_p->data[1];
-		d->cnt = msg_p->data[5];
-		pub.broadcast(d);
-	}
-}
-
-static msg_t RxThread(void *arg) {
-	Middleware & mw = Middleware::instance();
-	Node n("rxnode");
-	rtcan_msg_t msg;
-	uint8_t data[sizeof(LEDDataDebug) - 2];
-
-	chRegSetThreadName("RX THD");
-
-	mw.newNode(&n);
-
-	if (n.advertise(&pub)) {
-		chprintf((BaseSequentialStream*)&SERIAL_DRIVER, "led23 pub OK\r\n");
-	} else {
-		chprintf((BaseSequentialStream*)&SERIAL_DRIVER, "led23 pub FAIL\r\n");
-			mw.delNode(&n);
-			return 0;
-	}
-
-
-	(void) arg;
-	chRegSetThreadName("RX");
-
-	msg.id = 999;
-	msg.type = RTCAN_SRT;
-	msg.callback = msg1_cb;
-	msg.params = NULL;
-	msg.size = sizeof(LEDDataDebug) - 2;
-	msg.data = (uint8_t *) &data;
-	msg.status = RTCAN_MSG_READY;
-
-	rtcanRegister(&RTCAND, &msg);
-
-	while (TRUE) {
-		chThdSleepMilliseconds(500);
-	}
-
-	return 0;
-}
-*/
 /*
  * Subscriber threads.
  */
@@ -370,7 +249,7 @@ static msg_t Thread1(void *arg) {
 	chRegSetThreadName("blinker");
 
 	while (TRUE) {
-		switch (RTCAND.state) {
+		switch (RTCAND1.state) {
 		case RTCAN_ERROR:
 			palTogglePad(LED_GPIO, LED4);
 			chThdSleepMilliseconds(200);
@@ -389,6 +268,7 @@ static msg_t Thread1(void *arg) {
  * Application entry point.
  */
 int main(void) {
+	RTCANConfig rtcan_config = {1000000, 100, 60};
 	Thread *shelltp = NULL;
 
 	/*
@@ -412,7 +292,7 @@ int main(void) {
 	shellInit();
 
 	rtcanInit();
-	rtcanStart (NULL);
+	rtcanStart (&RTCAND1, &rtcan_config);
 
 	/*
 	 * Creates the blinker thread.
@@ -435,6 +315,7 @@ int main(void) {
 //	chThdCreateFromHeap (NULL, WA_SIZE_512B, NORMALPRIO + 2, RxThread, NULL);
 	Middleware & mw = Middleware::instance();
 	RemotePublisher rpub("led23", sizeof(LEDDataDebug));
+	rpub.id((123 << 8) | 40);
 	mw.advertise(&rpub);
 
 	/*

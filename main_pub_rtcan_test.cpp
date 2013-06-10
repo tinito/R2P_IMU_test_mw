@@ -39,6 +39,16 @@
 
 void remote_sub(const char * topic);
 
+/*===========================================================================*/
+/* STM32 id & reset.                                                         */
+/*===========================================================================*/
+
+uint8_t stm32_id8(void) {
+	const unsigned long * uid = (const unsigned long *)0x1FFFF7E8;
+
+	return (uid[2] & 0xFF);
+}
+
 void stm32_reset(void) {
 
 	chThdSleep(MS2ST(10) );
@@ -53,8 +63,8 @@ void stm32_reset(void) {
 	 * it won't be possible to see that it was a software-triggered reset.
 	 * */
 
-	SCB->AIRCR = ((0x5FA << SCB_AIRCR_VECTKEY_Pos)
-			| (SCB->AIRCR & SCB_AIRCR_PRIGROUP_Msk) | SCB_AIRCR_VECTRESET_Msk
+	SCB ->AIRCR = ((0x5FA << SCB_AIRCR_VECTKEY_Pos)
+			| (SCB ->AIRCR & SCB_AIRCR_PRIGROUP_Msk)| SCB_AIRCR_VECTRESET_Msk
 			| SCB_AIRCR_SYSRESETREQ_Msk);
 
 	/* Ensure completion of memory access. */
@@ -179,7 +189,7 @@ static msg_t PublisherThread1(void *arg) {
 					nd);
 		}
 
-		chThdSleepMilliseconds(1);
+		chThdSleepMilliseconds(100);
 
 		d = pub.alloc();
 		if (d != NULL) {
@@ -191,7 +201,7 @@ static msg_t PublisherThread1(void *arg) {
 					nd);
 		}
 
-		chThdSleepMilliseconds(1);
+		chThdSleepMilliseconds(100);
 
 		d = pub.alloc();
 		if (d != NULL) {
@@ -203,7 +213,7 @@ static msg_t PublisherThread1(void *arg) {
 					nd);
 		}
 
-		chThdSleepMilliseconds(1);
+		chThdSleepMilliseconds(100);
 
 		d = pub.alloc();
 		if (d != NULL) {
@@ -215,7 +225,7 @@ static msg_t PublisherThread1(void *arg) {
 					nd);
 		}
 
-		chThdSleepMilliseconds(1);
+		chThdSleepMilliseconds(100);
 	}
 
 	return 0;
@@ -268,7 +278,7 @@ void remote_sub(const char * topic) {
 	pub = mw.findLocalPublisher(topic);
 
 	if (pub) {
-		rsub.id(999);
+		rsub.id((123 << 8) | stm32_id8());
 		rsub.subscribe(pub);
 	}
 }
@@ -298,6 +308,7 @@ static msg_t Thread1(void *arg) {
  * Application entry point.
  */
 int main(void) {
+	RTCANConfig rtcan_config = {1000000, 100, 60};
 	Thread *shelltp = NULL;
 
 	/*
@@ -321,7 +332,7 @@ int main(void) {
 	shellInit();
 
 	rtcanInit();
-	rtcanStart(NULL);
+	rtcanStart(&RTCAND1, &rtcan_config);
 
 	/*
 	 * Creates the blinker thread.
@@ -347,7 +358,6 @@ int main(void) {
 	 */
 	remote_sub("led23");
 
-	chprintf((BaseSequentialStream *) &SERIAL_DRIVER, "UID8: %d\r\n", uid8());
 	chprintf((BaseSequentialStream *) &SERIAL_DRIVER, "sizeof(LEDData): %d",
 			sizeof(LEDData));
 	chprintf((BaseSequentialStream *) &SERIAL_DRIVER,
