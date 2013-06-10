@@ -58,9 +58,9 @@ endif
 PROJECT = ch
 
 # Imported source files and paths
-CHIBIOS = ../ChibiOS
-RTCAN = /home/tino/workspace/openrobots/RTCAN
-R2MW = /home/tino/workspace/openrobots/MW
+CHIBIOS = ../ChibiOS-git
+RTCAN = /home/tino/workspace/openrobots/RTCANv2
+R2MW = /home/tino/workspace/openrobots/Middleware
 
 include ./board.mk
 include $(CHIBIOS)/os/hal/platforms/STM32F1xx/platform.mk
@@ -92,7 +92,7 @@ CSRC = $(PORTSRC) \
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
-CPPSRC += $(CHIBIOS)/os/various/ch.cpp $(R2MWCPPSRC)
+CPPSRC += $(CHIBIOS)/os/various/cpp_wrappers/ch.cpp $(R2MWCPPSRC)
 
 ifeq ($(TEST),)
   CPPSRC += main.cpp
@@ -148,6 +148,7 @@ ASMSRC = $(PORTASM)
 INCDIR = $(PORTINC) $(KERNINC) $(TESTINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC) \
          $(CHIBIOS)/os/various \
+          $(CHIBIOS)/os/various/cpp_wrappers \
          $(RTCANINC) $(RTCANPLATFORMINC) \
          $(R2P)/Various/src \
          $(R2MWINC) $(R2MW)/../Various
